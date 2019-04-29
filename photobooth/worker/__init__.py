@@ -19,13 +19,15 @@
 
 import logging
 import os.path
-
-from time import localtime, strftime
+import dropbox
+import six
+import sys
+import contextlib
+from time import localtime, strftime, time
 
 from .PictureList import PictureList
 from .. import StateMachine
 from ..Threading import Workers
-
 
 class WorkerTask:
 
@@ -40,30 +42,43 @@ class WorkerTask:
 
 class PictureSaver(WorkerTask):
 
-    def __init__(self, basename):
+    def __init__(self, basename, dbx):
 
         super().__init__()
-
+        self._dbx = dbx
         self._pic_list = PictureList(basename)
-
+            
     def do(self, picture):
 
         filename = self._pic_list.getNext()
         logging.info('Saving picture as %s', filename)
         with open(filename, 'wb') as f:
             f.write(picture.getbuffer())
-
+        
+        if self._dbx is not None:
+            print('upload to dropbox', filename, dropbox.files.WriteMode.add)
+            with open(filename, 'rb') as f:
+                data = f.read()
+            try:
+                res = self._dbx.files_upload(data, os.path.join('/', filename), dropbox.files.WriteMode.add)
+            except:
+                print('Dropbox upload error', sys.exc_info()[0])
+            else:
+                print('Dropbox upload ok', filename)
 
 class Worker:
 
     def __init__(self, config, comm):
-
         self._comm = comm
-
-        self.initPostprocessTasks(config)
-        self.initPictureTasks(config)
-
-    def initPostprocessTasks(self, config):
+        dropbox_api_key = config.get('Storage', 'dropbox_api_key')
+        dbx=None
+        if len(dropbox_api_key) > 0:
+            dbx = dropbox.Dropbox(dropbox_api_key)
+        
+        self.initPostprocessTasks(config, dbx)
+        self.initPictureTasks(config, dbx)
+        
+    def initPostprocessTasks(self, config, dbx):
 
         self._postprocess_tasks = []
 
@@ -71,9 +86,9 @@ class Worker:
         path = os.path.join(config.get('Storage', 'basedir'),
                             config.get('Storage', 'basename'))
         basename = strftime(path, localtime())
-        self._postprocess_tasks.append(PictureSaver(basename))
+        self._postprocess_tasks.append(PictureSaver(basename, dbx))
 
-    def initPictureTasks(self, config):
+    def initPictureTasks(self, config, dbx):
 
         self._picture_tasks = []
 
@@ -81,7 +96,7 @@ class Worker:
         path = os.path.join(config.get('Storage', 'basedir'),
                             config.get('Storage', 'basename') + '_shot_')
         basename = strftime(path, localtime())
-        self._picture_tasks.append(PictureSaver(basename))
+        self._picture_tasks.append(PictureSaver(basename, dbx))
 
     def run(self):
 

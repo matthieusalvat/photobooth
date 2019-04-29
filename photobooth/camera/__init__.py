@@ -18,6 +18,7 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import logging
+import traceback
 
 from PIL import Image, ImageOps
 from io import BytesIO
@@ -138,6 +139,7 @@ class Camera:
                 self._comm.send(Workers.GUI,
                                 StateMachine.CameraEvent('preview', byte_data))
 
+
     def capturePicture(self, state):
 
         self.setIdle()
@@ -163,15 +165,31 @@ class Camera:
     def assemblePicture(self):
 
         self.setIdle()
-
+        
         picture = self._template.copy()
         for i in range(self._pic_dims.totalNumPictures):
             shot = Image.open(self._pictures[i])
             resized = shot.resize(self._pic_dims.thumbnailSize)
             picture.paste(resized, self._pic_dims.thumbnailOffset[i])
 
+        filter = self._cfg.get('Picture', 'filter')
+        print(filter)
+        if len(filter) > 0:
+            if filter == 'Sepia':
+                picture=ImageOps.grayscale(picture) #"convertion nb"
+                picture=ImageOps.colorize(picture,(42,15,0),(255,240,220)) #"colorisation"
+            if filter == 'Grayscale':
+                picture=ImageOps.grayscale(picture) #"convertion nb"
+            
+        foreground = self._cfg.get('Picture', 'foreground')
+        if len(foreground) > 0:
+            picture=picture.convert("RGBA")
+            fg_picture = Image.open(foreground)
+            picture=Image.alpha_composite(picture, fg_picture).convert("RGB")
+        
         byte_data = BytesIO()
         picture.save(byte_data, format='jpeg')
         self._comm.send(Workers.MASTER,
                         StateMachine.CameraEvent('review', byte_data))
         self._pictures = []
+

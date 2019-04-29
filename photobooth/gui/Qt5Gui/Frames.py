@@ -678,6 +678,9 @@ class Settings(QtWidgets.QFrame):
         bg = QtWidgets.QLineEdit(self._cfg.get('Picture', 'background'))
         self.add('Picture', 'background', bg)
 
+        fg = QtWidgets.QLineEdit(self._cfg.get('Picture', 'foreground'))
+        self.add('Picture', 'foreground', fg)
+
         lay_num = QtWidgets.QHBoxLayout()
         lay_num.addWidget(num_x)
         lay_num.addWidget(QtWidgets.QLabel('x'))
@@ -693,24 +696,54 @@ class Settings(QtWidgets.QFrame):
         lay_dist.addWidget(QtWidgets.QLabel('x'))
         lay_dist.addWidget(min_dist_y)
 
-        def file_dialog():
+        def bg_file_dialog():
             dialog = QtWidgets.QFileDialog.getOpenFileName
             bg.setText(dialog(self, _('Select file'), os.path.expanduser('~'),
                               'Images (*.jpg *.png)')[0])
+        def fg_file_dialog():
+            dialog = QtWidgets.QFileDialog.getOpenFileName
+            bg.setText(dialog(self, _('Select file'), os.path.expanduser('~'),
+                              'Images (*.png)')[0])
 
-        file_button = QtWidgets.QPushButton(_('Select file'))
-        file_button.clicked.connect(file_dialog)
+        bg_file_button = QtWidgets.QPushButton(_('Select file'))
+        bg_file_button.clicked.connect(bg_file_dialog)
 
-        lay_file = QtWidgets.QHBoxLayout()
-        lay_file.addWidget(bg)
-        lay_file.addWidget(file_button)
+        bg_file = QtWidgets.QHBoxLayout()
+        bg_file.addWidget(bg)
+        bg_file.addWidget(bg_file_button)
+
+        fg_file_button = QtWidgets.QPushButton(_('Select file'))
+        fg_file_button.clicked.connect(fg_file_dialog)
+
+        fg_file = QtWidgets.QHBoxLayout()
+        fg_file.addWidget(fg)
+        fg_file.addWidget(fg_file_button)
+
+        self.filter_vals_ = ('', 'Grayscale', 'Sepia')
+        cur_filter = self._cfg.get('Picture', 'filter')
+
+        filter = QtWidgets.QComboBox()
+        for r in self.filter_vals_:
+            filter.addItem(r)
+
+        print(cur_filter)
+        idx = [x for x, r in enumerate(self.filter_vals_) if r == cur_filter]
+        filter.setCurrentIndex(idx[0] if len(idx) > 0 else -1)
+
+        # Fix bug in Qt to allow changing the items in a stylesheet
+        delegate = QtWidgets.QStyledItemDelegate()
+        filter.setItemDelegate(delegate)
+
+        self.add('Picture', 'filter', filter)
 
         layout = QtWidgets.QFormLayout()
         layout.addRow(_('Number of shots per picture:'), lay_num)
         layout.addRow(_('Size of assembled picture [px]:'), lay_size)
         layout.addRow(_('Min. distance between shots [px]:'), lay_dist)
         layout.addRow(_('Omit last picture:'), skip_last)
-        layout.addRow(_('Background image:'), lay_file)
+        layout.addRow(_('Background image:'), bg_file)
+        layout.addRow(_('Foreground image:'), fg_file)
+        layout.addRow(_('Filter:'), filter)
 
         widget = QtWidgets.QWidget()
         widget.setLayout(layout)
@@ -742,11 +775,15 @@ class Settings(QtWidgets.QFrame):
         lay_dir.addWidget(basedir)
         lay_dir.addWidget(dir_button)
 
+        dropbox_api_key = QtWidgets.QLineEdit(self._cfg.get('Storage', 'dropbox_api_key'))
+        self.add('Storage', 'dropbox_api_key', dropbox_api_key)
+        
         layout = QtWidgets.QFormLayout()
         layout.addRow(_('Output directory (strftime possible):'), lay_dir)
         layout.addRow(_('Basename of files (strftime possible):'), basename)
         layout.addRow(_('Keep single shots:'), keep_pictures)
-
+        layout.addRow(_('Dropbox API key:'), dropbox_api_key)
+        
         widget = QtWidgets.QWidget()
         widget.setLayout(layout)
         return widget
@@ -896,6 +933,10 @@ class Settings(QtWidgets.QFrame):
                       str(self.get('Picture', 'skip_last').isChecked()))
         self._cfg.set('Picture', 'background',
                       self.get('Picture', 'background').text())
+        self._cfg.set('Picture', 'foreground',
+                      self.get('Picture', 'foreground').text())
+        self._cfg.set('Picture', 'filter', str(
+            self.filter_vals_[self.get('Picture', 'filter').currentIndex()]))
 
         self._cfg.set('Storage', 'basedir',
                       self.get('Storage', 'basedir').text())
@@ -903,6 +944,8 @@ class Settings(QtWidgets.QFrame):
                       self.get('Storage', 'basename').text())
         self._cfg.set('Storage', 'keep_pictures',
                       str(self.get('Storage', 'keep_pictures').isChecked()))
+        self._cfg.set('Storage', 'dropbox_api_key',
+                      self.get('Storage', 'dropbox_api_key').text())
 
         self._cfg.set('Gpio', 'enable',
                       str(self.get('Gpio', 'enable').isChecked()))
